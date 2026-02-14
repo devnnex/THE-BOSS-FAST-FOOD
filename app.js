@@ -1,8 +1,8 @@
 // app.js — lógica completa para The Boss (con imágenes locales)
 
 // ---------- Config ----------
-const BUSINESS_PHONE = '573001234567'; // <- reemplaza por el número real (sin '+')
-const DELIVERY_FEE = 4000; // tarifa por defecto de domicilio
+const BUSINESS_PHONE = '573236122968'; // <- reemplaza por el número real (sin '+')
+const DELIVERY_FEE = 0; // tarifa por defecto de domicilio
 
 // ---------- Datos de ejemplo ----------
 const products = [
@@ -329,19 +329,22 @@ function switchCategory(cat){
     ct.classList.add('fade-in');
   }, 180);
 }
-
 // ---------- Render productos ----------
-function renderProducts(cat){
+function renderProducts(cat) { 
   const q = (searchInput.value || '').trim().toLowerCase();
-  const items = products.filter(p => p.category === cat && (p.title.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)));
+  const items = products.filter(p => 
+    p.category === cat && 
+    (p.title.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q))
+  );
+
   catalogEl.innerHTML = '';
 
-  if(items.length === 0){
+  if (items.length === 0) {
     catalogEl.innerHTML = `<div class="no-results">No hay productos</div>`;
     return;
   }
 
-  items.forEach(p=>{
+  items.forEach(p => {
     const el = document.createElement('article');
     el.className = 'card';
     el.innerHTML = `
@@ -353,189 +356,423 @@ function renderProducts(cat){
         <button class="add" data-id="${p.id}">Agregar</button>
       </div>
     `;
-    el.querySelector('.add').addEventListener('click', ()=> openProductModal(p.id));
+    el.querySelector('.add').addEventListener('click', () => openProductModal(p.id));
     catalogEl.appendChild(el);
   });
 }
 
-// ---------- Modal producto ----------
-function openProductModal(productId){
-  const p = products.find(x=>x.id === productId);
-  if(!p) return;
-  productModal.classList.remove('hidden');
-  productModal.setAttribute('aria-hidden', 'false');
 
-  modalContent.innerHTML = '';
-  const wrapper = document.createElement('div');
-  wrapper.className = 'options';
-  wrapper.innerHTML = `
-    <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" style="width:100%;border-radius:10px;margin-bottom:10px;">
-    <h3>${escapeHtml(p.title)} — $${numberWithCommas(p.price)}</h3>
-    <p class="desc">${escapeHtml(p.desc)}</p>
+// ---------- MINI MODAL CLEAN ----------
+// ---------- FUNCION CORREGIDA: openProductModal ----------
+function openProductModal(id, cartIndex = null) {
+
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+
+  // ===== TAMAÑO SELECCIONADO =====
+  let selectedSize = p.sizes
+    ? p.sizes[0]
+    : { id: p.id, price: p.price, image: p.image, label: "" };
+
+  // ===== OVERLAY =====
+  const overlay = document.createElement("div");
+  overlay.className = "product-overlay";
+
+  overlay.innerHTML = `
+    <div class="product-sheet">
+      <div class="modal-header">
+        <span class="close">&times;</span>
+      </div>
+
+      <div class="modal-body">
+        <div class="image-wrap">
+          <img id="product-img" src="${selectedSize.image}" alt="${p.title}">
+        </div>
+
+        <div class="info">
+          <h2>${p.title}</h2>
+          <p>${p.desc}</p>
+
+          ${p.sizes ? `
+            <h3>Variedad</h3>
+            <div class="size-selector">
+              ${p.sizes.map(s => `
+                <label class="size-option">
+                  <input type="radio" name="size" value="${s.id}" ${s.id === selectedSize.id ? "checked" : ""}>
+                  ${s.label} — $${numberWithCommas(s.price)}
+                </label>
+              `).join("")}
+            </div>
+          ` : ""}
+
+          ${p.extras?.length ? `
+            <h3>Adiciones</h3>
+            <div class="extras-list">
+              ${p.extras.map(e => `
+                <label>
+                  <input type="checkbox"
+                         data-key="${e.name}"
+                         data-price="${e.price}">
+                  <span>${e.name}</span>
+                  <span class="extra-controls">
+                    <button class="minus-extra">−</button>
+                    <span class="extra-qty">0</span>
+                    <button class="plus-extra">+</button>
+                  </span>
+                  <small>+$${numberWithCommas(e.price)}</small>
+                </label>
+              `).join("")}
+            </div>
+          ` : ""}
+
+          <div class="quantity">
+            <button class="minus">−</button>
+            <span class="qty">1</span>
+            <button class="plus">+</button>
+          </div>
+
+          <button class="add-btn">
+            ${cartIndex !== null ? "Actualizar" : "Agregar"}
+            <span class="price">$${numberWithCommas(selectedSize.price)}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   `;
 
-  // Ingredientes para quitar
-  if(p.ingredients && p.ingredients.length){
-    const ingList = document.createElement('div');
-    ingList.className = 'option-list';
-    ingList.innerHTML = '<strong>Quitar ingredientes</strong>';
-    p.ingredients.forEach((ing, idx)=>{
-      const id = `ing-${p.id}-${idx}`;
-      const label = document.createElement('label');
-      label.className = 'checkbox';
-      label.innerHTML = `<input type="checkbox" data-ing="${escapeHtml(ing)}" id="${id}"> Quitar ${escapeHtml(ing)}`;
-      ingList.appendChild(label);
-    });
-    wrapper.appendChild(ingList);
-  }
+  document.body.appendChild(overlay);
 
-  // Extras
-  if(p.extras && p.extras.length){
-    const extrasDiv = document.createElement('div');
-    extrasDiv.className = 'option-list';
-    extrasDiv.innerHTML = '<strong>Agregar adicionales</strong>';
-    p.extras.forEach((ex, idx)=>{
-      const id = `ex-${p.id}-${idx}`;
-      const label = document.createElement('label');
-      label.className = 'additional';
-      label.innerHTML = `<input type="checkbox" data-extra="${escapeHtml(ex.name)}" data-price="${ex.price}" id="${id}"> ${escapeHtml(ex.name)} (+$${numberWithCommas(ex.price)})`;
-      extrasDiv.appendChild(label);
-    });
-    wrapper.appendChild(extrasDiv);
-  }
+  // ===== CERRAR =====
+  overlay.querySelector(".close").onclick = () => overlay.remove();
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
 
-  // Cantidad
-  const qtyRow = document.createElement('div');
-  qtyRow.className = 'qty-controls';
-  qtyRow.innerHTML = `<button id="qty-decr" type="button">-</button><span id="qty-val">1</span><button id="qty-incr" type="button">+</button>`;
-  wrapper.appendChild(qtyRow);
-
-  // Precio dinámico + añadir
-  const priceRow = document.createElement('div');
-  priceRow.style.display = 'flex';
-  priceRow.style.justifyContent = 'space-between';
-  priceRow.style.marginTop = '12px';
-  priceRow.innerHTML = `<div><strong>Total:</strong> <span id="modal-price">$${numberWithCommas(p.price)}</span></div><button id="modal-add" class="btn-primary" type="button">Añadir al carrito</button>`;
-  wrapper.appendChild(priceRow);
-
-  modalContent.appendChild(wrapper);
-
-  // Estado modal
+  // ===== VARIABLES =====
   let qty = 1;
-  function getExtrasSum(){
-    return Array.from(modalContent.querySelectorAll('input[data-price]:checked')).reduce((s, el)=> s + Number(el.dataset.price || 0), 0);
-  }
-  function updateModalPrice(){
-    const extras = getExtrasSum();
-    const total = (p.price + extras) * qty;
-    const el = document.getElementById('modal-price');
-    if(el) el.textContent = '$' + numberWithCommas(total);
+  const qtyEl = overlay.querySelector(".qty");
+  const priceEl = overlay.querySelector(".price");
+  const extrasInputs = overlay.querySelectorAll(".extras-list input");
+
+  // 🔐 ESTADO ROBUSTO DE EXTRAS
+  const extrasState = {};
+  // { "Tocineta": { qty: 3, price: 3000 } }
+
+  // ===== EDICIÓN =====
+  if (cartIndex !== null) {
+    const item = cart[cartIndex];
+
+    if (p.sizes) {
+      selectedSize = p.sizes.find(s => s.id === item.sizeId) || p.sizes[0];
+      overlay.querySelector("#product-img").src = selectedSize.image;
+      overlay.querySelector(`input[value="${selectedSize.id}"]`).checked = true;
+    }
+
+    qty = item.qty;
+    qtyEl.textContent = qty;
+
+    if (item.extras?.length) {
+      item.extras.forEach(e => {
+        extrasState[e.name] = { qty: e.qty, price: e.price };
+      });
+
+      extrasInputs.forEach(input => {
+        const key = input.dataset.key;
+        if (extrasState[key]) {
+          input.checked = true;
+          input.closest("label").querySelector(".extra-qty").textContent =
+            extrasState[key].qty;
+        }
+      });
+    }
   }
 
-  // Listeners
-  modalContent.querySelector('#qty-decr').addEventListener('click', ()=>{
-    if(qty > 1) qty--;
-    document.getElementById('qty-val').textContent = qty;
-    updateModalPrice();
+  // ===== PRECIO FINAL (CORREGIDO) =====
+  function updatePrice() {
+    let extrasTotal = 0;
+
+    Object.values(extrasState).forEach(e => {
+      extrasTotal += e.price * e.qty;
+    });
+
+    // 🔑 CLAVE: el producto se multiplica, los extras NO
+    const total = (selectedSize.price * qty) + extrasTotal;
+
+    priceEl.textContent = `$${numberWithCommas(total)}`;
+  }
+
+  updatePrice();
+
+  // ===== CAMBIO DE TAMAÑO =====
+  overlay.querySelectorAll("input[name='size']").forEach(radio => {
+    radio.onchange = e => {
+      selectedSize = p.sizes.find(s => s.id === e.target.value);
+      overlay.querySelector("#product-img").src = selectedSize.image;
+      updatePrice();
+    };
   });
-  modalContent.querySelector('#qty-incr').addEventListener('click', ()=>{
+
+  // ===== CANTIDAD =====
+  overlay.querySelector(".plus").onclick = () => {
     qty++;
-    document.getElementById('qty-val').textContent = qty;
-    updateModalPrice();
-  });
-  modalContent.querySelectorAll('input[type=checkbox]').forEach(inp => inp.addEventListener('change', updateModalPrice));
+    qtyEl.textContent = qty;
+    updatePrice();
+  };
 
-  modalContent.querySelector('#modal-add').addEventListener('click', ()=>{
-    const removed = Array.from(modalContent.querySelectorAll('input[data-ing]:checked')).map(i => i.dataset.ing);
-    const extras = Array.from(modalContent.querySelectorAll('input[data-extra]:checked')).map(i => ({ name: i.dataset.extra, price: Number(i.dataset.price) }));
-    addToCart({ productId: p.id, title: p.title, price: p.price, qty, removed, extras });
-    closeProductModal();
+  overlay.querySelector(".minus").onclick = () => {
+    if (qty > 1) {
+      qty--;
+      qtyEl.textContent = qty;
+      updatePrice();
+    }
+  };
+
+  // ===== CHECKBOX EXTRAS =====
+  extrasInputs.forEach(input => {
+    const key = input.dataset.key;
+    const price = Number(input.dataset.price);
+    const qtyEl = input.closest("label").querySelector(".extra-qty");
+
+    input.onchange = () => {
+      if (input.checked) {
+        extrasState[key] = { qty: 1, price };
+        qtyEl.textContent = 1;
+      } else {
+        delete extrasState[key];
+        qtyEl.textContent = 0;
+      }
+      updatePrice();
+    };
   });
+
+  // ===== + EXTRA =====
+  overlay.querySelectorAll(".plus-extra").forEach(btn => {
+    btn.onclick = () => {
+      const label = btn.closest("label");
+      const input = label.querySelector("input");
+      const key = input.dataset.key;
+      const price = Number(input.dataset.price);
+      const qtyEl = label.querySelector(".extra-qty");
+
+      if (!extrasState[key]) {
+        extrasState[key] = { qty: 0, price };
+        input.checked = true;
+      }
+
+      extrasState[key].qty++;
+      qtyEl.textContent = extrasState[key].qty;
+      updatePrice();
+    };
+  });
+
+  // ===== − EXTRA =====
+  overlay.querySelectorAll(".minus-extra").forEach(btn => {
+    btn.onclick = () => {
+      const label = btn.closest("label");
+      const input = label.querySelector("input");
+      const key = input.dataset.key;
+      const qtyEl = label.querySelector(".extra-qty");
+
+      if (!extrasState[key]) return;
+
+      extrasState[key].qty--;
+
+      if (extrasState[key].qty <= 0) {
+        delete extrasState[key];
+        input.checked = false;
+        qtyEl.textContent = 0;
+      } else {
+        qtyEl.textContent = extrasState[key].qty;
+      }
+
+      updatePrice();
+    };
+  });
+
+  // ===== AGREGAR / ACTUALIZAR =====
+  overlay.querySelector(".add-btn").onclick = () => {
+
+    const extras = Object.entries(extrasState).map(([name, e]) => ({
+      name,
+      price: e.price,
+      qty: e.qty
+    }));
+
+    const item = {
+      productId: p.id,
+      sizeId: selectedSize.id,
+      title: selectedSize.label ? `${p.title} (${selectedSize.label})` : p.title,
+      price: selectedSize.price,
+      qty,
+      image: selectedSize.image,
+      extras
+    };
+
+    if (cartIndex !== null) {
+      cart[cartIndex] = item;
+    } else {
+      addToCart(item);
+    }
+
+    persistCart();
+    refreshCartUI();
+    updateCartBadge();
+    overlay.remove();
+    cartDrawer.classList.remove("hidden");
+  };
 }
 
-function closeProductModal(){
-  productModal.classList.add('hidden');
-  productModal.setAttribute('aria-hidden','true');
-  modalContent.innerHTML = '';
-}
-modalClose.addEventListener('click', closeProductModal);
-productModal.addEventListener('click', (e)=>{ if(e.target === productModal) closeProductModal(); });
+
+
+
+
+
 
 // ---------- Carrito ----------
-function addToCart(item){
-  const key = generateCartKey(item);
-  const existing = cart.find(c => c.key === key);
-  if(existing){ existing.qty += item.qty; }
-  else{ cart.push({...item, key}); }
+
+// Agregar producto al carrito
+function addToCart(item) {
+  // Si ya existe el mismo producto con las mismas adiciones, solo aumentar cantidad
+  const existing = cart.find(c => 
+    c.productId === item.productId && 
+    JSON.stringify(c.extras) === JSON.stringify(item.extras)
+  );
+
+  if (existing) {
+    existing.qty += item.qty;
+  } else {
+    cart.push(item);
+  }
   persistCart();
   refreshCartUI();
+  updateCartBadge();
 }
 
-function generateCartKey(it){
-  const extrasPart = (it.extras || []).map(e => e.name).sort().join('|') || '';
-  const removedPart = (it.removed || []).slice().sort().join('|') || '';
-  return `${it.productId}::${extrasPart}::${removedPart}`;
-}
-
-function persistCart(){
+// Guardar en localStorage
+function persistCart() {
   localStorage.setItem('tb_cart', JSON.stringify(cart));
 }
 
-function refreshCartUI(){
-  cartCountEl.textContent = String(cart.reduce((s,i) => s + i.qty, 0));
+// Actualizar contador del ícono del carrito
+function updateCartBadge() {
+  const count = cart.reduce((sum, i) => sum + i.qty, 0);
+  cartCountEl.textContent = count;
+}
+
+// Renderizar los ítems del carrito
+// ---------- Carrito ----------
+// ---------- refreshCartUI CORREGIDA PARA REFLEJAR CAMBIOS ----------
+function refreshCartUI() {
   cartItemsEl.innerHTML = '';
-  let subtotal = 0;
 
-  if(cart.length === 0){
-    cartItemsEl.innerHTML = '<div class="muted">Tu carrito está vacío</div>';
-  } else {
-    cart.forEach((c, idx)=>{
-      const extrasText = (c.extras && c.extras.length) ? ('+' + c.extras.map(e=>e.name).join(', ')) : '';
-      const removedText = (c.removed && c.removed.length) ? ('(sin ' + c.removed.join(', ') + ')') : '';
-      const extrasSum = (c.extras || []).reduce((s,e)=> s + (e.price || 0), 0);
-      const itemTotal = (c.price + extrasSum) * c.qty;
-      subtotal += itemTotal;
-
-      const row = document.createElement('div');
-      row.className = 'cart-item';
-      row.innerHTML = `
-        <div class="info">
-          <div><strong>${escapeHtml(c.title)}</strong> ${escapeHtml(removedText)}</div>
-          <div class="muted">${escapeHtml(extrasText)}</div>
-        </div>
-        <div style="text-align:right">
-          <div>$${numberWithCommas(itemTotal)}</div>
-          <div class="qty-controls">
-            <button data-action="decr" data-idx="${idx}" type="button">-</button>
-            <span>${c.qty}</span>
-            <button data-action="incr" data-idx="${idx}" type="button">+</button>
-            <button data-action="del" data-idx="${idx}" type="button">🗑</button>
-          </div>
-        </div>
-      `;
-      cartItemsEl.appendChild(row);
-    });
+  if (cart.length === 0) {
+    cartItemsEl.innerHTML = '<div class="empty">Tu carrito está vacío 🍔</div>';
+    cartSubtotalEl.textContent = '$0';
+    cartDeliveryEl.textContent = '$0';
+    cartTotalEl.textContent = '$0';
+    updateCartBadge();
+    return;
   }
 
-  cartSubtotalEl.textContent = '$' + numberWithCommas(subtotal);
-  const delivery = subtotal > 0 ? DELIVERY_FEE : 0;
-  cartDeliveryEl.textContent = '$' + numberWithCommas(delivery);
-  cartTotalEl.textContent = '$' + numberWithCommas(subtotal + delivery);
+  let subtotal = 0;
 
-  // bind buttons
-  cartItemsEl.querySelectorAll('button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const action = btn.dataset.action;
-      const i = Number(btn.dataset.idx);
-      if(Number.isNaN(i)) return;
-      if(action === 'incr') cart[i].qty++;
-      else if(action === 'decr') cart[i].qty = Math.max(1, cart[i].qty - 1);
-      else if(action === 'del') cart.splice(i, 1);
+  cart.forEach((item, idx) => {
+
+    // ===== TOTAL DE EXTRAS (NO SE MULTIPLICA POR qty) =====
+    const extrasTotal =
+      item.extras?.reduce((sum, e) => sum + (e.price * e.qty), 0) || 0;
+
+    // 🔑 CLAVE: producto * cantidad + extras
+    const itemTotal = (item.price * item.qty) + extrasTotal;
+
+    subtotal += itemTotal;
+
+    const extrasText = item.extras?.length
+      ? item.extras
+          .map(e =>
+            `+ ${e.name} x${e.qty} ($${numberWithCommas(e.price * e.qty)})`
+          )
+          .join('<br>')
+      : '';
+
+    const div = document.createElement('div');
+    div.className = 'cart-item';
+
+    div.innerHTML = `
+      <img class="cart-item-img" src="${item.image}" alt="${item.title}">
+      <div class="info">
+        <h4>${item.title}</h4>
+        ${extrasText ? `<small>${extrasText}</small>` : ''}
+        <div class="qty-controls">
+          <button class="minus">−</button>
+          <span>${item.qty}</span>
+          <button class="plus">+</button>
+        </div>
+      </div>
+      <div class="price">
+        <span>$${numberWithCommas(itemTotal)}</span>
+        <button class="remove-btn" title="Eliminar producto">🗑️</button>
+      </div>
+    `;
+
+    // ===== CONTROL DE CANTIDAD =====
+    div.querySelector('.plus').addEventListener('click', () => {
+      item.qty++;
       persistCart();
       refreshCartUI();
     });
+
+    div.querySelector('.minus').addEventListener('click', () => {
+      if (item.qty > 1) {
+        item.qty--;
+      } else {
+        cart.splice(idx, 1);
+      }
+      persistCart();
+      refreshCartUI();
+    });
+
+    // ===== ELIMINAR =====
+    div.querySelector('.remove-btn').addEventListener('click', () => {
+      if (confirm(`¿Eliminar "${item.title}" del carrito?`)) {
+        cart.splice(idx, 1);
+        persistCart();
+        refreshCartUI();
+      }
+    });
+
+    // ===== EDITAR =====
+    div.addEventListener('click', (e) => {
+      if (
+        !e.target.classList.contains('minus') &&
+        !e.target.classList.contains('plus') &&
+        !e.target.classList.contains('remove-btn')
+      ) {
+        cartDrawer.classList.add('hidden');
+        openProductModal(item.productId, idx);
+      }
+    });
+
+    cartItemsEl.appendChild(div);
   });
+
+  cartSubtotalEl.textContent = `$${numberWithCommas(subtotal)}`;
+  cartDeliveryEl.textContent = `$${numberWithCommas(DELIVERY_FEE)}`;
+  cartTotalEl.textContent = `$${numberWithCommas(subtotal + DELIVERY_FEE)}`;
+  updateCartBadge();
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ---------- Interacciones UI ----------
 openCartBtn.addEventListener('click', ()=>{ cartDrawer.classList.remove('hidden'); cartDrawer.setAttribute('aria-hidden','false'); });
@@ -544,76 +781,245 @@ checkoutBtn.addEventListener('click', ()=>{ cartDrawer.classList.add('hidden'); 
 clearCartBtn.addEventListener('click', ()=>{ if(confirm('Vaciar carrito?')){ cart = []; persistCart(); refreshCartUI(); } });
 
 // ---------- Checkout ----------
-function openCheckout(){
-  if(cart.length === 0){ alert('El carrito está vacío.'); return; }
-  checkoutForm.reset();
-  addressLabel.classList.add('hidden');
-  checkoutModal.classList.remove('hidden');
-  checkoutModal.setAttribute('aria-hidden','false');
-}
 
-checkoutClose.addEventListener('click', ()=>{ checkoutModal.classList.add('hidden'); checkoutModal.setAttribute('aria-hidden','true'); });
-backToCartBtn.addEventListener('click', ()=>{ checkoutModal.classList.add('hidden'); cartDrawer.classList.remove('hidden'); });
-
-// Mostrar campo dirección sólo si es domicilio
-checkoutForm.addEventListener('change', ()=>{
-  const methodEls = checkoutForm.elements['method'];
-  let method = 'recoger';
-  if(methodEls){
-    if(methodEls.length !== undefined){
-      for(const r of methodEls){ if(r.checked){ method = r.value; break; } }
-    } else method = methodEls.value;
+// ---------- Checkout ----------
+function openCheckout() {
+  if (cart.length === 0) { 
+    alert('El carrito está vacío.'); 
+    return; 
   }
-  addressLabel.classList.toggle('hidden', method !== 'domicilio');
+
+  // 🔹 Recalcular subtotal actual (incluyendo extras)
+// 🔥 Recalcular subtotal REAL (incluye extras)
+let subtotal = 0;
+
+cart.forEach(item => {
+  const extrasTotal =
+    item.extras?.reduce((sum, e) => sum + e.price * e.qty, 0) || 0;
+
+  const itemTotal = (item.price * item.qty) + extrasTotal;
+  subtotal += itemTotal;
 });
 
+
+
+  const delivery = 0; // por defecto
+  const total = subtotal + delivery;
+
+  // 🔹 Actualizar DOM inicial
+  document.getElementById('cart-subtotal').textContent = `$${numberWithCommas(subtotal)}`;
+  document.getElementById('cart-delivery').textContent = `$${numberWithCommas(delivery)}`;
+  document.getElementById('cart-total').textContent = `$${numberWithCommas(total)}`;
+  document.getElementById('cart-total-checkout').textContent = `$${numberWithCommas(total)}`;
+
+  // 🔹 Reset formulario
+  checkoutForm.reset();
+  document.getElementById('address-label').classList.add('hidden');
+  document.getElementById('envio-row').classList.add('hidden');
+
+  // 🔹 Mostrar modal
+  checkoutModal.classList.remove('hidden');
+  checkoutModal.setAttribute('aria-hidden', 'false');
+
+  // 🔹 Recalcular al cambiar método (recoger/domicilio)
+  const radios = checkoutForm.querySelectorAll('input[name="method"]');
+  radios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      const method = checkoutForm.querySelector('input[name="method"]:checked')?.value || 'recoger';
+      const addressLabel = document.getElementById('address-label');
+      const envioRow = document.getElementById('envio-row');
+      const deliveryEl = document.getElementById('cart-delivery');
+      const totalCheckoutEl = document.getElementById('cart-total-checkout');
+
+      const DELIVERY_FEE = 0;
+      const delivery = (method === 'domicilio' && subtotal > 0) ? DELIVERY_FEE : 0;
+      const totalUpdated = subtotal + delivery;
+
+      // Mostrar/ocultar campos
+      addressLabel.classList.toggle('hidden', method !== 'domicilio');
+      envioRow.classList.toggle('hidden', method !== 'domicilio');
+
+      // Actualizar montos
+      deliveryEl.textContent = `$${numberWithCommas(delivery)}`;
+      totalCheckoutEl.textContent = `$${numberWithCommas(totalUpdated)}`;
+    });
+  });
+}
+
+
+checkoutClose.addEventListener('click', () => {
+  checkoutModal.classList.add('hidden');
+  checkoutModal.setAttribute('aria-hidden', 'true');
+});
+
+backToCartBtn.addEventListener('click', () => {
+  checkoutModal.classList.add('hidden');
+  cartDrawer.classList.remove('hidden');
+});
+
+// === Calcular totales del checkout ===
+function updateCheckoutTotals() {
+  const method = checkoutForm.querySelector('input[name="method"]:checked')?.value || 'recoger';
+  const envioRow = document.getElementById('envio-row');
+  const subtotalEl = document.getElementById('cart-subtotal-checkout');
+  const deliveryEl = document.getElementById('cart-delivery-checkout');
+  const totalEl = document.getElementById('cart-total-checkout');
+
+  const DELIVERY_FEE = 0;
+
+  // Mostrar u ocultar campo de dirección
+  addressLabel.classList.toggle('hidden', method !== 'domicilio');
+
+  // 🔥 CALCULAR SUBTOTAL EXACTO (CON EXTRAS)
+let subtotal = 0;
+
+cart.forEach(item => {
+  const extrasTotal =
+    item.extras?.reduce((sum, e) => sum + e.price * e.qty, 0) || 0;
+
+  const itemTotal = (item.price * item.qty) + extrasTotal;
+  subtotal += itemTotal;
+});
+
+  // Envío
+  const delivery = method === 'domicilio' && subtotal > 0 ? DELIVERY_FEE : 0;
+  const total = subtotal + delivery;
+
+  // Mostrar/ocultar fila de envío
+  envioRow.classList.toggle('hidden', method !== 'domicilio');
+
+  // Actualizar valores visibles
+  subtotalEl.textContent = `$${numberWithCommas(subtotal)}`;
+  deliveryEl.textContent = `$${numberWithCommas(delivery)}`;
+  totalEl.textContent = `$${numberWithCommas(total)}`;
+}
+
+
+
+checkoutForm.addEventListener('change', updateCheckoutTotals);
+
+
+
+
+
+
+// URL del endpoint de Google Apps Script (base de datos de pedidos)
+// const GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwm_1k9_4u68gAgUuSbvOXA5jfq1aIMJIaaFNDiB9PKa0yFBrZhhhMVQQQ-Qc22jeEb/exec";
+
+
 // Envío por WhatsApp
-checkoutForm.addEventListener('submit', (e)=>{
+// ✅ Escucha del formulario de checkout
+// Envío por WhatsApp
+checkoutForm.addEventListener('submit', (e) => {
   e.preventDefault();
+
   const fd = new FormData(checkoutForm);
-  const clientName = fd.get('name') || '';
-  const clientPhone = fd.get('phone') || '';
+  const clientName = fd.get('name')?.trim() || '';
+  const clientPhone = fd.get('phone')?.trim() || '';
   const method = fd.get('method') || 'recoger';
-  const address = fd.get('address') || '';
-  const notes = fd.get('notes') || '';
+  const payment = fd.get('payment') || '';
+  const address = fd.get('address')?.trim() || '';
+  const notes = fd.get('notes')?.trim() || '';
 
   let textParts = [];
-  textParts.push('*Pedido - The Boss*');
-  textParts.push(`Cliente: ${clientName}`);
-  textParts.push(`Teléfono: ${clientPhone}`);
-  textParts.push(`Tipo: ${method}`);
-  if(method === 'domicilio') textParts.push(`Dirección: ${address}`);
+
+  // Cabecera
+  textParts.push('🧾 *Nuevo Pedido - The Boss Food Truck🍔✅*');
+  textParts.push(`👤 Cliente: ${clientName}`);
+  textParts.push(`📞 Teléfono: ${clientPhone}`);
+  textParts.push(`🚚 Tipo: ${method}`);
+  if (method === 'domicilio') textParts.push(`🏠 Dirección: ${address}`);
+  textParts.push(`💳 Pago: ${payment}`);
   textParts.push('');
-  textParts.push('*Detalle:*');
+  textParts.push('🍔 *Detalle del pedido:*');
 
   let subtotal = 0;
-  cart.forEach(c=>{
-    const extrasText = (c.extras && c.extras.length) ? (' + ' + c.extras.map(x=>x.name).join(', ')) : '';
-    const removedText = (c.removed && c.removed.length) ? (' sin ' + c.removed.join(', ')) : '';
-    const extrasSum = (c.extras || []).reduce((s,e)=> s + (e.price || 0), 0);
-    const itemTotal = (c.price + extrasSum) * c.qty;
-    subtotal += itemTotal;
-    textParts.push(`${c.qty} x ${c.title}${extrasText}${removedText} — $${numberWithCommas(itemTotal)}`);
-  });
 
-  const delivery = subtotal > 0 ? DELIVERY_FEE : 0;
+cart.forEach(item => {
+  // Calcular precio de extras individualmente
+  const extras = item.extras || [];
+  const extrasLines = extras
+    .map(e => `   ➕ ${e.qty}x ${e.name} ($${numberWithCommas(e.price * e.qty)})`)
+    .join('\n');
+
+  const extrasSum = extras.reduce((sum, e) => sum + e.price * e.qty, 0);
+
+  // 🔑 FIX: NO multiplicar extras por la cantidad del producto
+  const itemTotal = (item.price * item.qty) + extrasSum;
+  subtotal += itemTotal;
+
+  // Mostrar producto base
+  textParts.push(
+    `${item.qty}x ${item.title} — *$${numberWithCommas(item.price * item.qty)}*`
+  );
+
+  if (extrasLines) textParts.push(extrasLines);
+
+  // Toppings removidos
+  if (item.removed && item.removed.length) {
+    textParts.push(`   ⚠️ Toppings removidos: ${item.removed.join(', ')}`);
+  }
+});
+
+  const delivery = method === 'domicilio' ? DELIVERY_FEE : 0;
+  const total = subtotal + delivery;
+
+  // Resumen de totales
   textParts.push('');
-  textParts.push(`Subtotal: $${numberWithCommas(subtotal)}`);
-  textParts.push(`Envío: $${numberWithCommas(delivery)}`);
-  textParts.push(`*Total: $${numberWithCommas(subtotal + delivery)}*`);
-  if(notes) textParts.push(`Notas: ${notes}`);
+  textParts.push(`🧮 Subtotal: $${numberWithCommas(subtotal)}`);
+  textParts.push(method === 'domicilio'
+    ? `🚗 Envío: $${numberWithCommas(delivery)}`
+    : '🏪 Envío: Sin costo (recoge en el local)');
+  textParts.push(`💰 *Total: $${numberWithCommas(total)}*`);
 
-  const msg = encodeURIComponent(textParts.join('\n'));
-  const bp = String(BUSINESS_PHONE || '').replace(/[^0-9]/g,'');
+  if (notes) textParts.push(`📝 Notas: ${notes}`);
 
-  if(!bp || bp.length < 8){
+  // Construir URL para WhatsApp
+  const bp = String(BUSINESS_PHONE || '').replace(/\D/g, '');
+  if (!bp || bp.length < 8) {
     alert('Configura BUSINESS_PHONE en app.js con el número del negocio.');
     return;
   }
 
+  const msg = encodeURIComponent(textParts.join('\n'));
   const waUrl = `https://wa.me/${bp}?text=${msg}`;
-  window.open(waUrl, '_blank');
+
+   // 🟢 1. REDIRECCIONAR INMEDIATAMENTE (NO BLOQUEABLE)
+  window.location.href = waUrl;
+ 
+
+  // 🟡 2. ENVIAR A SHEETS EN SEGUNDO PLANO
+  // const orderData = {
+  //   fecha: new Date().toLocaleString(),
+  //   nombre: clientName,
+  //   telefono: clientPhone,
+  //   metodo: method,
+  //   pago: payment,
+  //   direccion: address,
+  //   notas: notes,
+  //   total: total,
+  //   carrito: cart.map(i => ({
+  //     producto: i.title,
+  //     cantidad: i.qty,
+  //     precio: i.price,
+  //     extras: i.extras?.map(e => `${e.qty}x ${e.name}`).join(', ') || ''
+  //   }))
+  // };
+
+  // fetch(GOOGLE_SHEET_API, {
+  //   method: "POST",
+  //   mode: "no-cors",
+  //   body: JSON.stringify(orderData),
+  //   headers: { "Content-Type": "application/json" },
+  //   keepalive: true // 🔑 importante para que no se cancele al redireccionar
+  // });
+
 });
+
+
+
+
+
 
 // ---------- Utilidades ----------
 function bindEvents(){
@@ -635,9 +1041,20 @@ const sideMenu = document.getElementById('side-menu');
 const closeMenu = document.getElementById('close-menu');
 
 menuBtn.addEventListener('click', () => {
+  // Primero activamos el menú
   sideMenu.classList.add('show');
+  sideMenu.style.opacity = 0;
+  sideMenu.style.transform = 'translateX(-20px)'; // empieza desplazado
+  sideMenu.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+
+  // Forzamos el repaint antes de animar
+  requestAnimationFrame(() => {
+    sideMenu.style.opacity = 1;
+    sideMenu.style.transform = 'translateX(0)';
+  });
   sideMenu.classList.remove('hidden');
 });
+
 
 closeMenu.addEventListener('click', () => {
   sideMenu.classList.remove('show');
@@ -651,3 +1068,182 @@ sideMenu.addEventListener('click', (e) => {
     setTimeout(() => sideMenu.classList.add('hidden'), 350);
   }
 });
+
+
+
+
+// ====== FORMULARIO DE PAGO ======
+
+document.addEventListener("DOMContentLoaded", () => {
+  const paymentSelect = document.getElementById("payment-method");
+  const transferInfo = document.getElementById("transfer-info");
+  const methodRadios = document.querySelectorAll('input[name="method"]');
+  const addressLabel = document.getElementById("address-label");
+  const envioRow = document.getElementById("envio-row");
+  const cartDelivery = document.getElementById("cart-delivery");
+  const DELIVERY_FEE = 0; // 💰 valor del domicilio
+  const accountNumber = document.getElementById("account-number");
+  const copyBtn = document.getElementById("copy-account");
+
+  // 🔸 Mostrar u ocultar dirección según método de entrega
+  methodRadios.forEach(radio => {
+    radio.addEventListener("change", () => {
+      if (radio.value === "domicilio" && radio.checked) {
+        addressLabel.classList.remove("hidden");
+        envioRow.classList.remove("hidden");
+        cartDelivery.textContent = `$${DELIVERY_FEE.toLocaleString()}`;
+      } else if (radio.value === "recoger" && radio.checked) {
+        addressLabel.classList.add("hidden");
+        envioRow.classList.add("hidden");
+        cartDelivery.textContent = "$0";
+      }
+    });
+  });
+
+  // 🔸 Mostrar info bancaria solo si selecciona transferencia
+  paymentSelect.addEventListener("change", () => {
+    if (paymentSelect.value === "transferencia") {
+      transferInfo.classList.remove("hidden");
+    } else {
+      transferInfo.classList.add("hidden");
+    }
+  });
+
+  // 🔸 Copiar número de cuenta
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(accountNumber.textContent.trim())
+      .then(() => {
+        copyBtn.textContent = "¡Copiado!";
+        copyBtn.classList.add("copied");
+        setTimeout(() => {
+          copyBtn.textContent = "Copiar";
+          copyBtn.classList.remove("copied");
+        }, 1800);
+      })
+      .catch(() => alert("No se pudo copiar"));
+  });
+});
+
+
+// --- FORM MULTIPASO (compatible con checkout actual) ---
+const form = document.getElementById("checkout-form");
+const step1 = document.getElementById("step1");
+const step2 = document.getElementById("step2");
+const nextStep1 = document.getElementById("next-step1");
+const backStep2 = document.getElementById("back-step2");
+const clientSummary = document.getElementById("client-summary");
+
+if (nextStep1) {
+  nextStep1.addEventListener("click", () => {
+    const name = form.name.value.trim();
+    const phone = form.phone.value.trim();
+
+    if (!name || !phone) {
+      alert("Por favor completa tu nombre y teléfono.");
+      return;
+    }
+
+    // Mostrar resumen
+    clientSummary.innerHTML = `<strong>${name} </strong><span>${phone}</span>`;
+
+    // Animación de transición
+    step1.classList.remove("active");
+    step2.classList.add("active");
+  });
+}
+
+if (backStep2) {
+  backStep2.addEventListener("click", () => {
+    step2.classList.remove("active");
+    step1.classList.add("active");
+  });
+}
+
+
+
+const checkoutOverlay = document.getElementById("checkout-modal");
+const btnConfirmOrder = document.getElementById("confirm-order"); // botón en el carrito
+const btnBackToCart = document.getElementById("back-to-cart");
+
+btnConfirmOrder?.addEventListener("click", () => {
+  checkoutOverlay.classList.remove("hidden");
+});
+
+btnBackToCart?.addEventListener("click", () => {
+  checkoutOverlay.classList.add("hidden");
+});
+
+
+// También cerrar si se toca fuera del panel
+checkoutOverlay.addEventListener("click", (e) => {
+  if (e.target === checkoutOverlay) {
+    checkoutOverlay.classList.remove("show");
+  }
+});
+
+
+// ============Descargar QR=================
+document.addEventListener("click", (e) => {
+  // Usa closest para soportar clicks sobre el SVG interno de FontAwesome
+  const btn = e.target.closest && e.target.closest(".qr-download");
+  if (!btn) return;
+
+  const imgPath = btn.dataset.img;
+  if (!imgPath) {
+    console.warn("qr-download sin data-img");
+    return;
+  }
+
+  // helper para descargar
+  const downloadImage = (url) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = url.split("/").pop();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Si SweetAlert2 no está disponible, fallback a confirm nativo
+  if (typeof Swal === "undefined") {
+    console.warn("SweetAlert2 (Swal) no disponible. Usando confirm nativo.");
+    const ok = confirm(
+      "Puedes pagar escaneando nuestros códigos QR de Nequi o Bancolombia.\n\nTambién puedes descargar los QR. ¿Descargar ahora?"
+    );
+    if (ok) downloadImage(imgPath);
+    return;
+  }
+
+  // SweetAlert2 disponible -> mostrar alerta antes de descargar
+  Swal.fire({
+    icon: "info",
+    title: "Pago con QR",
+    html: `
+      Puedes pagar escaneando nuestros códigos QR de <strong>Nequi</strong> o <strong>Bancolombia</strong>.<br><br>
+      También puedes <strong>descargar los QR</strong> dando clic en el icono de descarga.
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Descargar",
+    cancelButtonText: "Cancelar",
+    background: "#0a0a0a",             // fondo negro
+    color: "#ffffff",                   // texto blanco
+    confirmButtonColor: "rgb(230, 213, 12)", // botón amarillo neón
+    cancelButtonColor: "#555555",       // cancel gris oscuro
+    iconColor: "rgb(230, 213, 12)"      // icono amarillo neón
+  }).then(result => {
+    if (result.isConfirmed) downloadImage(imgPath);
+  });
+});
+
+
+
+// ============Fin de codigo de Descarga QR=================
+
+
+
+
+
+
+
+
+
